@@ -215,6 +215,29 @@ antigravity-server
 antigravity-server --no-web
 ```
 
+### Option E: Linux / Windows Server Headless (Native, no GUI)
+
+For dedicated servers, each release publishes standalone headless archives containing the native `antigravity-server` binary plus the Web UI assets (`dist/`). One-line installers download and unpack them without installing the desktop GUI:
+
+```bash
+# Linux (x86_64 / aarch64 auto-detected)
+curl -fsSL https://raw.githubusercontent.com/lbjlaq/Antigravity-Manager/main/install-headless.sh | bash
+```
+
+```powershell
+# Windows x64 (PowerShell)
+irm https://raw.githubusercontent.com/lbjlaq/Antigravity-Manager/main/install-headless.ps1 | iex
+```
+
+Then start the server (headless mode binds `0.0.0.0:8045` by default — set `ABV_API_KEY` for production and `ABV_BIND_LOCAL_ONLY=1` for localhost-only):
+
+```bash
+ABV_API_KEY='your-key' ./antigravity-server -p 8045
+```
+
+> [!NOTE]
+> These installers only download and unpack files; they do **not** register any system service. Use systemd / NSSM / Task Scheduler for process management.
+
 > [!TIP]
 > **🧪 Pulling Beta / Preview Images**:
 > To test the latest Beta pre-release features, specify the corresponding Beta version tag (pre-releases are published independently and will never overwrite the `latest` stable tag):

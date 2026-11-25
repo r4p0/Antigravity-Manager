@@ -330,8 +330,103 @@ jobs:
           path: antigravity-server-android-arm64.tar.gz
           if-no-files-found: error
 
+  # 各服务器平台原生 Headless 服务端构建与打包（Linux x86_64 / aarch64、Windows x64）
+  build-headless:
+    name: Build Headless Server (${{ matrix.target }})
+    needs: verify-release-target
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x86_64
+            runner: ubuntu-22.04
+            bin: antigravity-server
+            archive: antigravity-server-linux-x86_64.tar.gz
+          - target: linux-aarch64
+            runner: ubuntu-24.04-arm
+            bin: antigravity-server
+            archive: antigravity-server-linux-aarch64.tar.gz
+          - target: windows-x64
+            runner: windows-2025
+            bin: antigravity-server.exe
+            archive: antigravity-server-windows-x64.tar.gz
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Rust setup
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Node.js setup
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev \
+            libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev \
+            libsoup-3.0-dev javascriptcoregtk-4.1 libjavascriptcoregtk-4.1-dev \
+            patchelf pkg-config
+          sudo rm -rf /var/lib/apt/lists/*
+
+      - name: Build frontend
+        shell: bash
+        run: |
+          npm install --legacy-peer-deps
+          npm run build
+
+      - name: Build headless server binary
+        shell: bash
+        run: |
+          cd src-tauri
+          cargo build --release --bin antigravity-server
+
+      - name: Package headless artifact (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p dist-headless
+          cp src-tauri/target/release/antigravity-server dist-headless/
+          cp -r dist dist-headless/dist
+          tar -czvf "${{ matrix.archive }}" -C dist-headless antigravity-server dist
+
+      - name: Package headless artifact (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist-headless | Out-Null
+          Copy-Item -Path src-tauri/target/release/antigravity-server.exe -Destination dist-headless/
+          Copy-Item -Path dist -Destination dist-headless/dist -Recurse -Force
+          tar -czf "${{ matrix.archive }}" -C dist-headless antigravity-server.exe dist
+
+      - name: Generate SHA256 checksum
+        shell: bash
+        run: |
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "${{ matrix.archive }}" > "${{ matrix.archive }}.sha256"
+          else
+            powershell -NoProfile -Command "(Get-FileHash -Algorithm SHA256 '${{ matrix.archive }}').Hash.ToLower() + '  ${{ matrix.archive }}'" > "${{ matrix.archive }}.sha256"
+          fi
+          cat "${{ matrix.archive }}.sha256"
+
+      - name: Upload Release Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-headless-${{ matrix.target }}
+          path: |
+            ${{ matrix.archive }}
+            ${{ matrix.archive }}.sha256
+          if-no-files-found: error
+
   publish-release:
-    needs: [verify-release-target, build-tauri, build-android-arm64]
+    needs: [verify-release-target, build-tauri, build-android-arm64, build-headless]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -485,13 +580,21 @@ jobs:
             -name "*.exe" -o \
             -name "*.rpm" -o \
             -name "*.tar.gz" -o \
-            -name "*.sig" \
+            -name "*.sig" -o \
+            -name "*.sha256" \
           \) -print0 | while IFS= read -r -d '' file; do
             cp "$file" release-files/
           done
           # 包含 Termux 一键安装脚本
           if [ -f scripts/install-termux.sh ]; then
             cp scripts/install-termux.sh release-files/
+          fi
+          # 包含 Headless 一键安装脚本
+          if [ -f install-headless.sh ]; then
+            cp install-headless.sh release-files/
+          fi
+          if [ -f install-headless.ps1 ]; then
+            cp install-headless.ps1 release-files/
           fi
           # 同步生成点号规范命名的副本，确保与 updater.json 中的下载 URL 100% 绝对一致
           cd release-files

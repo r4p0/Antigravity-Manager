@@ -215,6 +215,28 @@ antigravity-server
 antigravity-server --no-web
 ```
 
+### 选项 E: Linux / Windows 服务器原生 Headless 部署
+针对专用服务器，每个版本都会发布独立的 Headless 安装包，内含对应平台的原生 `antigravity-server` 二进制与 Web UI 资源（`dist/`）。一键安装脚本仅下载并解压，不会安装桌面 GUI：
+
+```bash
+# Linux（自动识别 x86_64 / aarch64）
+curl -fsSL https://raw.githubusercontent.com/lbjlaq/Antigravity-Manager/main/install-headless.sh | bash
+```
+
+```powershell
+# Windows x64 (PowerShell)
+irm https://raw.githubusercontent.com/lbjlaq/Antigravity-Manager/main/install-headless.ps1 | iex
+```
+
+启动服务（headless 默认绑定 `0.0.0.0:8045`，生产环境请设置 `ABV_API_KEY`，仅本机访问可加 `ABV_BIND_LOCAL_ONLY=1`）：
+
+```bash
+ABV_API_KEY='your-key' ./antigravity-server -p 8045
+```
+
+> [!NOTE]
+> 安装脚本仅下载与解压文件，**不会**注册任何系统服务。进程管理请使用 systemd / NSSM / 任务计划程序。
+
 > [!TIP]
 > **🧪 Beta / 预览版镜像拉取**：
 > 若需使用最新的 Beta 预发布特性，请直接指定对应的 Beta 版本 Tag（预发布版本独立发布，不会覆盖 `latest` 稳定版标签）：
